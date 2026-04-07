@@ -9,14 +9,25 @@
   </head>
   <body>
     <main class="container">
-      <h1>DefDect (GitHub Pages)</h1>
-      <p class="sub">Upload one PDF and check likely Delhi HC filing objections in-browser.</p>
+      <header class="hero card">
+        <p class="eyebrow">Delhi HC Filing Assistant</p>
+        <h1>DefDect (GitHub Pages)</h1>
+        <p class="sub">Upload one PDF and get an instant objection pre-screening report in your browser.</p>
+        <div class="chips">
+          <span class="chip">No server upload</span>
+          <span class="chip">Client-side PDF reading</span>
+          <span class="chip">Email-style report</span>
+        </div>
+      </header>
 
       <section class="card">
+        <h2>Case Context</h2>
+        <p class="hint">Enter these fields so the generated report reads like the court dashboard message.</p>
         <div class="meta-grid">
           <input id="diaryNo" type="text" placeholder="Diary No (e.g. 143753/2026)" />
           <input id="caseTitle" type="text" placeholder="Case Title" />
         </div>
+        <label for="pdfInput" class="file-label">Select Filing PDF</label>
         <input id="pdfInput" type="file" accept="application/pdf" />
         <button id="checkBtn">Check Defects</button>
 
@@ -24,6 +35,16 @@
           <div id="progressBar" class="progress-bar"></div>
         </div>
         <p id="status"></p>
+      </section>
+
+      <section class="card">
+        <h3>How it works</h3>
+        <ol class="steps">
+          <li>Reads text from your PDF pages using in-browser parsing.</li>
+          <li>Matches phrases against common objection patterns.</li>
+          <li>Builds a dashboard-style defect summary for quick review.</li>
+        </ol>
+        <p class="hint">This is a screening aid and not legal advice.</p>
       </section>
 
       <section id="result" class="card hidden"></section>

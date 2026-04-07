@@ -25,11 +25,18 @@ function setStatus(text, isError = false) {
   status.style.color = isError ? "#dc2626" : "#111827";
 }
 
+function confidenceClass(score) {
+  if (score >= 70) return "high";
+  if (score >= 40) return "medium";
+  return "low";
+}
+
 async function extractPdfText(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
   const pdfjsLib = await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs");
   const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
   const chunks = [];
+  setStatus(`Reading ${pdf.numPages} page(s)...`);
 
   for (let i = 1; i <= pdf.numPages; i += 1) {
     const page = await pdf.getPage(i);
@@ -37,6 +44,7 @@ async function extractPdfText(file) {
     const text = content.items.map((x) => x.str).join(" ");
     chunks.push(text);
     progressBar.style.width = `${Math.round((i / pdf.numPages) * 100)}%`;
+    setStatus(`Analyzing page ${i} of ${pdf.numPages}...`);
   }
   return chunks.join("\n").toLowerCase();
 }
@@ -65,11 +73,12 @@ function renderResult(defects) {
   const nowDisplay = now.toLocaleString();
   const main = defects.slice(0, 3);
   const other = defects.slice(3);
+  const topRisk = defects[0]?.confidence ?? 0;
 
   const mainRows = main.map((d, i) => `
     <tr>
       <td class="c-sl">${i + 1}</td>
-      <td>(${d.code}) - ${d.title}</td>
+      <td>(${d.code}) - ${d.title} <span class="pill ${confidenceClass(d.confidence)}">${d.confidence}%</span></td>
       <td class="c-date">${dateOnly}</td>
       <td class="c-date"></td>
     </tr>
@@ -78,12 +87,17 @@ function renderResult(defects) {
   const otherRows = other.map((d, i) => `
     <tr>
       <td class="c-sl">${i + 4}</td>
-      <td colspan="2">Description of any other Defects: (${d.code}) - ${d.title}</td>
+      <td colspan="2">Description of any other Defects: (${d.code}) - ${d.title} <span class="pill ${confidenceClass(d.confidence)}">${d.confidence}%</span></td>
       <td class="c-date">${dateOnly}</td>
     </tr>
   `).join("");
 
   result.innerHTML = `
+    <div class="summary">
+      <div class="metric"><span class="label">Rules Checked</span><span class="value">${RULES.length}</span></div>
+      <div class="metric"><span class="label">Possible Defects</span><span class="value">${defects.length}</span></div>
+      <div class="metric"><span class="label">Top Risk</span><span class="value">${topRisk}%</span></div>
+    </div>
     <p>Dear Sir/Madam</p>
     <p class="indent">Thank you for using e-filing.</p>
     <p class="indent">Please check defect(s) marked against</p>
@@ -119,14 +133,20 @@ button.addEventListener("click", async () => {
   progressWrap.classList.remove("hidden");
   progressBar.style.width = "0%";
   result.classList.add("hidden");
-  setStatus("Reading PDF and checking objections...");
+  button.disabled = true;
+  button.textContent = "Checking...";
+  setStatus("Preparing analysis...");
 
   try {
     const text = await extractPdfText(file);
+    setStatus("Matching objections...");
     const defects = checkRules(text);
     renderResult(defects);
     setStatus("Check completed.");
   } catch (e) {
     setStatus("Unable to read this PDF in browser.", true);
+  } finally {
+    button.disabled = false;
+    button.textContent = "Check Defects";
   }
 });
