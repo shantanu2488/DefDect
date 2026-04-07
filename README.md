@@ -20,6 +20,30 @@ Single-PDF objection checker prototype for Delhi High Court style filing defects
 - Shows upload progress bar and a tabular defect output (email-style metadata supported).
 - Exports screening report as PDF and Word (`.docx`).
 
+## GitHub Pages deployment (static mode)
+
+The repository now includes a Pages-ready static app in `docs/`:
+
+- `docs/index.html`
+- `docs/app.js`
+- `docs/style.css`
+- `.github/workflows/pages.yml` (auto deploy)
+
+How to enable:
+
+1. Push latest `main` branch to GitHub.
+2. Open repository **Settings -> Pages**.
+3. Under **Build and deployment**, choose **GitHub Actions**.
+4. Wait for workflow **Deploy GitHub Pages** to complete.
+5. Your app will be available at:
+   - `https://shantanu2488.github.io/DefDect/`
+
+Notes:
+
+- GitHub Pages mode runs entirely in browser (no FastAPI backend).
+- PDF text extraction is done client-side using `pdf.js`.
+- This mode keeps the same email-style output format and objection screening flow.
+
 ## Notes
 
 - This is keyword-based matching, not legal advice.

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DefDect - GitHub Pages</title>
+    <link rel="stylesheet" href="./style.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" type="module"></script>
+  </head>
+  <body>
+    <main class="container">
+      <h1>DefDect (GitHub Pages)</h1>
+      <p class="sub">Upload one PDF and check likely Delhi HC filing objections in-browser.</p>
+
+      <section class="card">
+        <div class="meta-grid">
+          <input id="diaryNo" type="text" placeholder="Diary No (e.g. 143753/2026)" />
+          <input id="caseTitle" type="text" placeholder="Case Title" />
+        </div>
+        <input id="pdfInput" type="file" accept="application/pdf" />
+        <button id="checkBtn">Check Defects</button>
+
+        <div id="progressWrap" class="progress-wrap hidden">
+          <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <p id="status"></p>
+      </section>
+
+      <section id="result" class="card hidden"></section>
+    </main>
+    <script src="./app.js" type="module"></script>
+  </body>
+</html>
