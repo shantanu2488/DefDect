@@ -112,7 +112,11 @@ function checkRules(text) {
 }
 
 function downloadPdfReport() {
-  if (!lastReport || !window.jspdf) {
+  if (!lastReport) {
+    setStatus("Run a defect check first, then download the PDF.", true);
+    return;
+  }
+  if (!window.jspdf?.jsPDF) {
     setStatus("PDF library not ready. Refresh the page and try again.", true);
     return;
   }
@@ -148,46 +152,69 @@ function downloadPdfReport() {
         ])
       : [["-", "No defects detected.", "", ""]];
 
-  doc.autoTable({
-    startY: y,
-    head: [["SlNo.", "Defects marked during Scrutiny", "Date of Defects Marked", "Date of Defect Removed"]],
-    body: bodyMain,
-    styles: { fontSize: 8, cellPadding: 2 },
-    headStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39] },
-    margin: { left: margin, right: margin },
-    columnStyles: {
-      0: { cellWidth: 14 },
-      1: { cellWidth: 110 },
-      2: { cellWidth: 28 },
-      3: { cellWidth: 28 }
-    }
-  });
+  const hasAutoTable = typeof doc.autoTable === "function";
+  let cursorY = y;
 
-  let cursorY = doc.lastAutoTable.finalY + 8;
-
-  if (other.length > 0) {
-    doc.setFontSize(10);
-    doc.text("Any Other Defects", margin, cursorY);
-    cursorY += 6;
-    const bodyOther = other.map((d, idx) => [
-      String(main.length + idx + 1),
-      `(${d.code}) - ${d.title} (${d.confidence}%)`,
-      lastReport.dateOnly
-    ]);
+  if (hasAutoTable) {
     doc.autoTable({
-      startY: cursorY,
-      head: [["SlNo.", "Description of any other Defects", "Marked On"]],
-      body: bodyOther,
+      startY: y,
+      head: [["SlNo.", "Defects marked during Scrutiny", "Date of Defects Marked", "Date of Defect Removed"]],
+      body: bodyMain,
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39] },
       margin: { left: margin, right: margin },
       columnStyles: {
         0: { cellWidth: 14 },
-        1: { cellWidth: 138 },
-        2: { cellWidth: 28 }
+        1: { cellWidth: 110 },
+        2: { cellWidth: 28 },
+        3: { cellWidth: 28 }
       }
     });
+
     cursorY = doc.lastAutoTable.finalY + 8;
+
+    if (other.length > 0) {
+      doc.setFontSize(10);
+      doc.text("Any Other Defects", margin, cursorY);
+      cursorY += 6;
+      const bodyOther = other.map((d, idx) => [
+        String(main.length + idx + 1),
+        `(${d.code}) - ${d.title} (${d.confidence}%)`,
+        lastReport.dateOnly
+      ]);
+      doc.autoTable({
+        startY: cursorY,
+        head: [["SlNo.", "Description of any other Defects", "Marked On"]],
+        body: bodyOther,
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39] },
+        margin: { left: margin, right: margin },
+        columnStyles: {
+          0: { cellWidth: 14 },
+          1: { cellWidth: 138 },
+          2: { cellWidth: 28 }
+        }
+      });
+      cursorY = doc.lastAutoTable.finalY + 8;
+    }
+  } else {
+    // Fallback when autoTable didn't attach (some browsers/CDN edge cases).
+    doc.setFontSize(10);
+    doc.text("Defects:", margin, cursorY);
+    cursorY += 6;
+    const all = lastReport.defects.length ? lastReport.defects : [{ code: 0, title: "No defects detected.", confidence: 0 }];
+    for (let i = 0; i < all.length; i += 1) {
+      const d = all[i];
+      const line = `${i + 1}. (${d.code}) ${d.title} (${d.confidence}%)`;
+      const wrapped = doc.splitTextToSize(line, 180);
+      doc.text(wrapped, margin, cursorY);
+      cursorY += wrapped.length * 5;
+      if (cursorY > 270) {
+        doc.addPage();
+        cursorY = 16;
+      }
+    }
+    cursorY += 4;
   }
 
   doc.setFont("helvetica", "normal");
