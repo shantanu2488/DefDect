@@ -40,12 +40,21 @@ async function extractPdfText(file) {
   const pdfjsLib = await import(`https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`);
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
 
-  const loadingTask = pdfjsLib.getDocument({
+  const baseOpts = {
     data: bytes,
     useWorkerFetch: true,
     isEvalSupported: false
-  });
-  const pdf = await loadingTask.promise;
+  };
+
+  // Some browsers (notably older iOS/Safari) have issues with module workers from CDN.
+  // Fallback to parsing on main thread if worker setup fails.
+  let pdf;
+  try {
+    pdf = await pdfjsLib.getDocument(baseOpts).promise;
+  } catch (err) {
+    console.error("pdf.js worker load failed, retrying without worker", err);
+    pdf = await pdfjsLib.getDocument({ ...baseOpts, disableWorker: true }).promise;
+  }
   const chunks = [];
   setStatus(`Reading ${pdf.numPages} page(s)...`);
 
@@ -258,9 +267,12 @@ button.addEventListener("click", async () => {
   } catch (e) {
     if (pdfActions) pdfActions.classList.add("hidden");
     lastReport = null;
-    const reason = e?.message ? ` Reason: ${e.message}` : "";
+    console.error("PDF read error:", e);
+    const name = e?.name ? `${e.name}` : "Error";
+    const msg = e?.message ? `${e.message}` : "";
+    const reason = msg ? ` Reason: ${name}: ${msg}` : ` Reason: ${name}`;
     setStatus(
-      `Unable to read this PDF in browser.${reason} Try a text-based PDF (not image-only or password-protected).`,
+      `Unable to read this PDF in browser.${reason} If it is password-protected or scanned (image-only), this static site may fail—try exporting a text-based PDF.`,
       true
     );
   } finally {
