@@ -221,18 +221,14 @@ function downloadPdfReport() {
   doc.setFontSize(10);
   doc.text(`Date : ${lastReport.nowDisplay}`, margin, cursorY);
 
-  // Safer download than doc.save() (iOS Safari often blocks/ignores it).
+  // Cross-browser strategy:
+  // 1) Try opening PDF in a new tab (reliable on mobile browsers)
+  // 2) Also try direct download for desktop browsers
   const filename = "defect-screening-report.pdf";
   const blob = doc.output("blob");
   const url = URL.createObjectURL(blob);
 
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  if (isIOS) {
-    // iOS Safari: open in new tab; user can then Share/Save to Files.
-    window.open(url, "_blank");
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    return;
-  }
+  const opened = window.open(url, "_blank");
 
   const a = document.createElement("a");
   a.href = url;
@@ -240,7 +236,13 @@ function downloadPdfReport() {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 5_000);
+
+  // If popup was blocked, navigate current tab to ensure user gets the PDF.
+  if (!opened) {
+    window.location.href = url;
+  }
+
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 function renderResult(defects) {
