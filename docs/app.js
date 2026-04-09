@@ -19,6 +19,7 @@ const status = document.getElementById("status");
 const result = document.getElementById("result");
 const pdfActions = document.getElementById("pdfActions");
 const downloadPdfBtn = document.getElementById("downloadPdfBtn");
+const manualDownloadLink = document.getElementById("manualDownloadLink");
 const PDFJS_VERSION = "4.4.168";
 
 /** @type {{ defects: Array<{code:number,title:string,confidence:number}>, dateOnly: string, nowDisplay: string, topRisk: number } | null} */
@@ -227,10 +228,17 @@ function downloadPdfReport() {
   // 3) dataurlnewwindow (mobile fallback)
   const filename = "defect-screening-report.pdf";
   let lastErr = null;
+  let preparedUrl = null;
 
   try {
     const blob = doc.output("blob");
     const url = URL.createObjectURL(blob);
+    preparedUrl = url;
+    if (manualDownloadLink) {
+      manualDownloadLink.href = url;
+      manualDownloadLink.download = filename;
+      manualDownloadLink.classList.remove("hidden");
+    }
     const a = document.createElement("a");
     a.href = url;
     a.download = filename;
@@ -253,6 +261,11 @@ function downloadPdfReport() {
   }
 
   try {
+    const dataUrl = doc.output("dataurlstring");
+    if (manualDownloadLink) {
+      manualDownloadLink.href = dataUrl;
+      manualDownloadLink.classList.remove("hidden");
+    }
     doc.output("dataurlnewwindow");
     return;
   } catch (err) {
@@ -260,6 +273,10 @@ function downloadPdfReport() {
     lastErr = err;
   }
 
+  if (preparedUrl && manualDownloadLink) {
+    manualDownloadLink.href = preparedUrl;
+    manualDownloadLink.classList.remove("hidden");
+  }
   throw lastErr || new Error("No supported PDF download method succeeded.");
 }
 
@@ -348,6 +365,10 @@ button.addEventListener("click", async () => {
   progressBar.style.width = "0%";
   result.classList.add("hidden");
   if (pdfActions) pdfActions.classList.add("hidden");
+  if (manualDownloadLink) {
+    manualDownloadLink.classList.add("hidden");
+    manualDownloadLink.removeAttribute("href");
+  }
   lastReport = null;
   button.disabled = true;
   button.textContent = "Checking...";
