@@ -222,27 +222,45 @@ function downloadPdfReport() {
   doc.text(`Date : ${lastReport.nowDisplay}`, margin, cursorY);
 
   // Cross-browser strategy:
-  // 1) Try opening PDF in a new tab (reliable on mobile browsers)
-  // 2) Also try direct download for desktop browsers
+  // 1) Blob URL + anchor download
+  // 2) jsPDF save()
+  // 3) dataurlnewwindow (mobile fallback)
   const filename = "defect-screening-report.pdf";
-  const blob = doc.output("blob");
-  const url = URL.createObjectURL(blob);
+  let lastErr = null;
 
-  const opened = window.open(url, "_blank");
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-
-  // If popup was blocked, navigate current tab to ensure user gets the PDF.
-  if (!opened) {
-    window.location.href = url;
+  try {
+    const blob = doc.output("blob");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return;
+  } catch (err) {
+    console.error("Blob download failed", err);
+    lastErr = err;
   }
 
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  try {
+    doc.save(filename);
+    return;
+  } catch (err) {
+    console.error("doc.save failed", err);
+    lastErr = err;
+  }
+
+  try {
+    doc.output("dataurlnewwindow");
+    return;
+  } catch (err) {
+    console.error("dataurlnewwindow failed", err);
+    lastErr = err;
+  }
+
+  throw lastErr || new Error("No supported PDF download method succeeded.");
 }
 
 function renderResult(defects) {
@@ -310,7 +328,12 @@ if (downloadPdfBtn) {
       downloadPdfReport();
       setStatus("PDF download started.");
     } catch (err) {
-      setStatus(err?.message ? `PDF export failed: ${err.message}` : "PDF export failed.", true);
+      setStatus(
+        err?.message
+          ? `PDF export failed: ${err.message}. Try desktop Chrome/Edge, or allow popups/downloads for this site.`
+          : "PDF export failed. Try desktop Chrome/Edge, or allow popups/downloads for this site.",
+        true
+      );
     }
   });
 }
