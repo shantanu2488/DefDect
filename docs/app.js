@@ -37,8 +37,20 @@ function confidenceClass(score) {
 
 async function extractPdfText(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const pdfjsLib = await import(`https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`);
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
+  let pdfjsLib;
+  try {
+    // Preferred: module build
+    pdfjsLib = await import(`https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`);
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
+  } catch (importErr) {
+    // Fallback: legacy UMD build injected via <script>
+    console.error("pdf.js module import failed, falling back to legacy build", importErr);
+    pdfjsLib = window.pdfjsLib;
+    if (!pdfjsLib) {
+      throw importErr;
+    }
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION}/pdf.worker.min.js`;
+  }
 
   const baseOpts = {
     data: bytes,
