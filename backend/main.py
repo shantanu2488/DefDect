@@ -119,8 +119,6 @@ def export_pdf(payload: ReportPayload):
     c.drawString(60, y, "Dear Sir/Madam")
     y -= 28
     c.setFont("Helvetica", 11)
-    c.drawString(90, y, "Thank you for using e-filing.")
-    y -= 18
     c.drawString(90, y, "Please check defect(s) marked against")
     y -= 18
     c.drawString(90, y, f"Diary No:{payload.diary_no} in the matter")
@@ -202,10 +200,6 @@ def export_pdf(payload: ReportPayload):
     y -= 14
     c.setFont("Helvetica", 11)
     c.drawString(60, y, f"Date :{now_display}")
-    y -= 26
-    c.drawString(60, y, "Please check your Dashboard regularly for")
-    y -= 16
-    c.drawString(60, y, "new updates.")
     c.save()
     buf.seek(0)
     return StreamingResponse(
@@ -220,7 +214,6 @@ def export_docx(payload: ReportPayload):
     doc = Document()
     now_display = payload.now_display or datetime.now().strftime("%d/%m/%Y %I:%M %p")
     doc.add_paragraph("Dear Sir/Madam")
-    doc.add_paragraph("Thank you for using e-filing.")
     doc.add_paragraph("Please check defect(s) marked against")
     doc.add_paragraph(f"Diary No:{payload.diary_no} in the matter")
     doc.add_paragraph(payload.case_title)
@@ -253,7 +246,6 @@ def export_docx(payload: ReportPayload):
             row[1].text = d.marked_on or d.date_marked or payload.generated_on or ""
 
     doc.add_paragraph(f"Date :{now_display}")
-    doc.add_paragraph("Please check your Dashboard regularly for new updates.")
     buf = BytesIO()
     doc.save(buf)
     buf.seek(0)

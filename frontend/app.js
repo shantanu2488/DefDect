@@ -61,7 +61,6 @@ function renderTable(data) {
     <div class="email">
       <div class="email-body">
         <p>Dear Sir/Madam</p>
-        <p class="indent">Thank you for using e-filing.</p>
         <p class="indent">Please check defect(s) marked against</p>
         <p class="indent">Diary No:${diaryNo.value || "N/A"} in the matter</p>
         <p class="indent">${caseTitle.value || "N/A"}</p>
@@ -94,7 +93,6 @@ function renderTable(data) {
         </div>
 
         <p class="footer">Date :${nowDisplay}</p>
-        <p class="indent">Please check your Dashboard regularly for new updates.</p>
         <p class="meta">Rules checked: ${data.total_rules_checked} | Possible defects: ${data.possible_defects_found} | Source: ${data.rules_source}</p>
       </div>
     </div>

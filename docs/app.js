@@ -13,12 +13,16 @@ const RULES = [
 
 const input = document.getElementById("pdfInput");
 const button = document.getElementById("checkBtn");
-const diaryNo = document.getElementById("diaryNo");
-const caseTitle = document.getElementById("caseTitle");
 const progressWrap = document.getElementById("progressWrap");
 const progressBar = document.getElementById("progressBar");
 const status = document.getElementById("status");
 const result = document.getElementById("result");
+const pdfActions = document.getElementById("pdfActions");
+const downloadPdfBtn = document.getElementById("downloadPdfBtn");
+const PDFJS_VERSION = "4.4.168";
+
+/** @type {{ defects: Array<{code:number,title:string,confidence:number}>, dateOnly: string, nowDisplay: string, topRisk: number } | null} */
+let lastReport = null;
 
 function setStatus(text, isError = false) {
   status.textContent = text;
@@ -33,8 +37,15 @@ function confidenceClass(score) {
 
 async function extractPdfText(file) {
   const bytes = new Uint8Array(await file.arrayBuffer());
-  const pdfjsLib = await import("https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs");
-  const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+  const pdfjsLib = await import(`https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.min.mjs`);
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION}/build/pdf.worker.min.mjs`;
+
+  const loadingTask = pdfjsLib.getDocument({
+    data: bytes,
+    useWorkerFetch: true,
+    isEvalSupported: false
+  });
+  const pdf = await loadingTask.promise;
   const chunks = [];
   setStatus(`Reading ${pdf.numPages} page(s)...`);
 
@@ -64,6 +75,92 @@ function checkRules(text) {
   return hits.sort((a, b) => b.confidence - a.confidence);
 }
 
+function downloadPdfReport() {
+  if (!lastReport || !window.jspdf) {
+    setStatus("PDF library not ready. Refresh the page and try again.", true);
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const margin = 14;
+  let y = 16;
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("Defect screening report", margin, y);
+  y += 9;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text(`Rules checked: ${RULES.length}  |  Possible defects: ${lastReport.defects.length}  |  Top risk: ${lastReport.topRisk}%`, margin, y);
+  y += 8;
+
+  doc.text("Dear Sir/Madam", margin, y);
+  y += 6;
+  doc.text("Please find below the defect screening summary for your filing.", margin + 2, y);
+  y += 10;
+
+  const main = lastReport.defects.slice(0, 3);
+  const other = lastReport.defects.slice(3);
+  const bodyMain =
+    main.length > 0
+      ? main.map((d, i) => [
+          String(i + 1),
+          `(${d.code}) - ${d.title} (${d.confidence}%)`,
+          lastReport.dateOnly,
+          ""
+        ])
+      : [["-", "No defects detected.", "", ""]];
+
+  doc.autoTable({
+    startY: y,
+    head: [["SlNo.", "Defects marked during Scrutiny", "Date of Defects Marked", "Date of Defect Removed"]],
+    body: bodyMain,
+    styles: { fontSize: 8, cellPadding: 2 },
+    headStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39] },
+    margin: { left: margin, right: margin },
+    columnStyles: {
+      0: { cellWidth: 14 },
+      1: { cellWidth: 110 },
+      2: { cellWidth: 28 },
+      3: { cellWidth: 28 }
+    }
+  });
+
+  let cursorY = doc.lastAutoTable.finalY + 8;
+
+  if (other.length > 0) {
+    doc.setFontSize(10);
+    doc.text("Any Other Defects", margin, cursorY);
+    cursorY += 6;
+    const bodyOther = other.map((d, idx) => [
+      String(main.length + idx + 1),
+      `(${d.code}) - ${d.title} (${d.confidence}%)`,
+      lastReport.dateOnly
+    ]);
+    doc.autoTable({
+      startY: cursorY,
+      head: [["SlNo.", "Description of any other Defects", "Marked On"]],
+      body: bodyOther,
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39] },
+      margin: { left: margin, right: margin },
+      columnStyles: {
+        0: { cellWidth: 14 },
+        1: { cellWidth: 138 },
+        2: { cellWidth: 28 }
+      }
+    });
+    cursorY = doc.lastAutoTable.finalY + 8;
+  }
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+  doc.text(`Date : ${lastReport.nowDisplay}`, margin, cursorY);
+
+  doc.save("defect-screening-report.pdf");
+}
+
 function renderResult(defects) {
   const now = new Date();
   const dd = String(now.getDate()).padStart(2, "0");
@@ -74,6 +171,9 @@ function renderResult(defects) {
   const main = defects.slice(0, 3);
   const other = defects.slice(3);
   const topRisk = defects[0]?.confidence ?? 0;
+
+  lastReport = { defects, dateOnly, nowDisplay, topRisk };
+  if (pdfActions) pdfActions.classList.remove("hidden");
 
   const mainRows = main.map((d, i) => `
     <tr>
@@ -99,10 +199,7 @@ function renderResult(defects) {
       <div class="metric"><span class="label">Top Risk</span><span class="value">${topRisk}%</span></div>
     </div>
     <p>Dear Sir/Madam</p>
-    <p class="indent">Thank you for using e-filing.</p>
-    <p class="indent">Please check defect(s) marked against</p>
-    <p class="indent">Diary No:${diaryNo.value || "N/A"} in the matter</p>
-    <p class="indent">${caseTitle.value || "N/A"}</p>
+    <p class="indent">Please find below the defect screening summary for your filing.</p>
     <table>
       <thead>
         <tr>
@@ -118,10 +215,20 @@ function renderResult(defects) {
       </tbody>
     </table>
     <p><strong>Date :</strong>${nowDisplay}</p>
-    <p class="indent">Please check your Dashboard regularly for new updates.</p>
     <p><small>Rules checked: ${RULES.length} | Possible defects: ${defects.length} | Source: static_rules</small></p>
   `;
   result.classList.remove("hidden");
+}
+
+if (downloadPdfBtn) {
+  downloadPdfBtn.addEventListener("click", () => {
+    try {
+      downloadPdfReport();
+      setStatus("PDF downloaded.");
+    } catch (err) {
+      setStatus(err?.message ? `PDF export failed: ${err.message}` : "PDF export failed.", true);
+    }
+  });
 }
 
 button.addEventListener("click", async () => {
@@ -133,18 +240,29 @@ button.addEventListener("click", async () => {
   progressWrap.classList.remove("hidden");
   progressBar.style.width = "0%";
   result.classList.add("hidden");
+  if (pdfActions) pdfActions.classList.add("hidden");
+  lastReport = null;
   button.disabled = true;
   button.textContent = "Checking...";
   setStatus("Preparing analysis...");
 
   try {
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      throw new Error("Please upload a .pdf file.");
+    }
     const text = await extractPdfText(file);
     setStatus("Matching objections...");
     const defects = checkRules(text);
     renderResult(defects);
     setStatus("Check completed.");
   } catch (e) {
-    setStatus("Unable to read this PDF in browser.", true);
+    if (pdfActions) pdfActions.classList.add("hidden");
+    lastReport = null;
+    const reason = e?.message ? ` Reason: ${e.message}` : "";
+    setStatus(
+      `Unable to read this PDF in browser.${reason} Try a text-based PDF (not image-only or password-protected).`,
+      true
+    );
   } finally {
     button.disabled = false;
     button.textContent = "Check Defects";
