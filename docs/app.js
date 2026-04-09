@@ -221,7 +221,26 @@ function downloadPdfReport() {
   doc.setFontSize(10);
   doc.text(`Date : ${lastReport.nowDisplay}`, margin, cursorY);
 
-  doc.save("defect-screening-report.pdf");
+  // Safer download than doc.save() (iOS Safari often blocks/ignores it).
+  const filename = "defect-screening-report.pdf";
+  const blob = doc.output("blob");
+  const url = URL.createObjectURL(blob);
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  if (isIOS) {
+    // iOS Safari: open in new tab; user can then Share/Save to Files.
+    window.open(url, "_blank");
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return;
+  }
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5_000);
 }
 
 function renderResult(defects) {
@@ -287,7 +306,7 @@ if (downloadPdfBtn) {
   downloadPdfBtn.addEventListener("click", () => {
     try {
       downloadPdfReport();
-      setStatus("PDF downloaded.");
+      setStatus("PDF download started.");
     } catch (err) {
       setStatus(err?.message ? `PDF export failed: ${err.message}` : "PDF export failed.", true);
     }
