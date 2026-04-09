@@ -1,4 +1,4 @@
-const RULES = [
+const FALLBACK_RULES = [
   { code: 205, title: "Memo of parties incomplete or unsigned", keywords: ["memo of parties", "petitioner", "respondent", "address", "email"] },
   { code: 209, title: "Court fee short/missing or stamping issue", keywords: ["court fee", "stamp", "valuation", "ad valorem"] },
   { code: 211, title: "Margin/paper format issues", keywords: ["margin", "left side", "a4", "legal size", "formatting"] },
@@ -18,6 +18,8 @@ const progressBar = document.getElementById("progressBar");
 const status = document.getElementById("status");
 const result = document.getElementById("result");
 const PDFJS_VERSION = "4.4.168";
+let ACTIVE_RULES = [...FALLBACK_RULES];
+let RULE_SOURCE = "fallback_static_rules";
 
 function setStatus(text, isError = false) {
   status.textContent = text;
@@ -28,6 +30,48 @@ function confidenceClass(score) {
   if (score >= 70) return "high";
   if (score >= 40) return "medium";
   return "low";
+}
+
+function keywordsFromText(text) {
+  const words = (text.toLowerCase().match(/[a-z]{4,}/g) || []);
+  const stop = new Set(["should", "filed", "given", "with", "that", "from", "this", "been", "also", "into", "only", "where", "which"]);
+  const out = [];
+  for (const w of words) {
+    if (stop.has(w)) continue;
+    if (!out.includes(w)) out.push(w);
+    if (out.length >= 6) break;
+  }
+  return out.length ? out : ["petition", "application", "affidavit"];
+}
+
+function parseRulesFromMarkdown(mdText) {
+  const rules = [];
+  const lines = mdText.split(/\r?\n/);
+  for (const line of lines) {
+    const m = line.match(/^\s*(\d{3})\\?\.\s*(.+)\s*$/);
+    if (!m) continue;
+    const code = Number(m[1]);
+    const title = m[2].trim();
+    if (!title || title.length < 8) continue;
+    rules.push({ code, title, keywords: keywordsFromText(title) });
+  }
+  return rules;
+}
+
+async function loadRules() {
+  try {
+    const res = await fetch("./list-of-common-objections-0.md", { cache: "no-store" });
+    if (!res.ok) throw new Error(`source file fetch failed: ${res.status}`);
+    const md = await res.text();
+    const parsed = parseRulesFromMarkdown(md);
+    if (parsed.length < 20) throw new Error("parsed too few rules");
+    ACTIVE_RULES = parsed;
+    RULE_SOURCE = "delhi_hc_markdown_source";
+  } catch (err) {
+    console.error("Rule-source load failed, using fallback rules", err);
+    ACTIVE_RULES = [...FALLBACK_RULES];
+    RULE_SOURCE = "fallback_static_rules";
+  }
 }
 
 async function extractPdfText(file) {
@@ -93,7 +137,7 @@ async function extractPdfText(file) {
 
 function checkRules(text) {
   const hits = [];
-  for (const rule of RULES) {
+  for (const rule of ACTIVE_RULES) {
     const matched = rule.keywords.filter((k) => text.includes(k));
     if (matched.length) {
       hits.push({
@@ -136,7 +180,7 @@ function renderResult(defects) {
 
   result.innerHTML = `
     <div class="summary">
-      <div class="metric"><span class="label">Rules Checked</span><span class="value">${RULES.length}</span></div>
+      <div class="metric"><span class="label">Rules Checked</span><span class="value">${ACTIVE_RULES.length}</span></div>
       <div class="metric"><span class="label">Possible Defects</span><span class="value">${defects.length}</span></div>
       <div class="metric"><span class="label">Top Risk</span><span class="value">${topRisk}%</span></div>
     </div>
@@ -157,7 +201,7 @@ function renderResult(defects) {
       </tbody>
     </table>
     <p><strong>Date :</strong>${nowDisplay}</p>
-    <p><small>Rules checked: ${RULES.length} | Possible defects: ${defects.length} | Source: static_rules</small></p>
+    <p><small>Rules checked: ${ACTIVE_RULES.length} | Possible defects: ${defects.length} | Source: ${RULE_SOURCE}</small></p>
   `;
   result.classList.remove("hidden");
 }
@@ -192,8 +236,6 @@ button.addEventListener("click", async () => {
     renderResult(defects);
     setStatus("Check completed.");
   } catch (e) {
-    if (pdfActions) pdfActions.classList.add("hidden");
-    lastReport = null;
     console.error("PDF read error:", e);
     const name = e?.name ? `${e.name}` : "Error";
     const msg = e?.message ? `${e.message}` : "";
@@ -206,4 +248,8 @@ button.addEventListener("click", async () => {
     button.disabled = false;
     button.textContent = "Check Defects";
   }
+});
+
+loadRules().then(() => {
+  setStatus(`Rule source ready: ${RULE_SOURCE.replaceAll("_", " ")}`);
 });
