@@ -63,18 +63,6 @@ button:disabled {
   cursor: wait;
 }
 
-#pdfActions button {
-  margin-left: 0;
-}
-
-.manual-link {
-  display: inline-block;
-  margin-left: 10px;
-  font-size: 13px;
-  color: #1d4ed8;
-  text-decoration: underline;
-}
-
 .file-label {
   display: block;
   margin: 8px 0 6px;

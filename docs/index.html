@@ -5,8 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>DefDect</title>
     <link rel="stylesheet" href="./style.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.4/jspdf.plugin.autotable.min.js"></script>
     <!-- PDF.js legacy build fallback (works on more browsers than module builds) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.js"></script>
   </head>
@@ -30,11 +28,6 @@
       </section>
 
       <section id="result" class="card hidden"></section>
-
-      <section id="pdfActions" class="card hidden">
-        <button id="downloadPdfBtn" type="button">Download PDF</button>
-        <a id="manualDownloadLink" class="manual-link hidden" target="_blank" rel="noopener noreferrer">Tap here if download does not start</a>
-      </section>
     </main>
     <script src="./app.js" type="module"></script>
   </body>

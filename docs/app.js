@@ -17,13 +17,7 @@ const progressWrap = document.getElementById("progressWrap");
 const progressBar = document.getElementById("progressBar");
 const status = document.getElementById("status");
 const result = document.getElementById("result");
-const pdfActions = document.getElementById("pdfActions");
-const downloadPdfBtn = document.getElementById("downloadPdfBtn");
-const manualDownloadLink = document.getElementById("manualDownloadLink");
 const PDFJS_VERSION = "4.4.168";
-
-/** @type {{ defects: Array<{code:number,title:string,confidence:number}>, dateOnly: string, nowDisplay: string, topRisk: number } | null} */
-let lastReport = null;
 
 function setStatus(text, isError = false) {
   status.textContent = text;
@@ -112,174 +106,6 @@ function checkRules(text) {
   return hits.sort((a, b) => b.confidence - a.confidence);
 }
 
-function downloadPdfReport() {
-  if (!lastReport) {
-    setStatus("Run a defect check first, then download the PDF.", true);
-    return;
-  }
-  if (!window.jspdf?.jsPDF) {
-    setStatus("PDF library not ready. Refresh the page and try again.", true);
-    return;
-  }
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const margin = 14;
-  let y = 16;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text("Defect screening report", margin, y);
-  y += 9;
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(`Rules checked: ${RULES.length}  |  Possible defects: ${lastReport.defects.length}  |  Top risk: ${lastReport.topRisk}%`, margin, y);
-  y += 8;
-
-  doc.text("Dear Sir/Madam", margin, y);
-  y += 6;
-  doc.text("Please find below the defect screening summary for your filing.", margin + 2, y);
-  y += 10;
-
-  const main = lastReport.defects.slice(0, 3);
-  const other = lastReport.defects.slice(3);
-  const bodyMain =
-    main.length > 0
-      ? main.map((d, i) => [
-          String(i + 1),
-          `(${d.code}) - ${d.title} (${d.confidence}%)`,
-          lastReport.dateOnly,
-          ""
-        ])
-      : [["-", "No defects detected.", "", ""]];
-
-  const hasAutoTable = typeof doc.autoTable === "function";
-  let cursorY = y;
-
-  if (hasAutoTable) {
-    doc.autoTable({
-      startY: y,
-      head: [["SlNo.", "Defects marked during Scrutiny", "Date of Defects Marked", "Date of Defect Removed"]],
-      body: bodyMain,
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39] },
-      margin: { left: margin, right: margin },
-      columnStyles: {
-        0: { cellWidth: 14 },
-        1: { cellWidth: 110 },
-        2: { cellWidth: 28 },
-        3: { cellWidth: 28 }
-      }
-    });
-
-    cursorY = doc.lastAutoTable.finalY + 8;
-
-    if (other.length > 0) {
-      doc.setFontSize(10);
-      doc.text("Any Other Defects", margin, cursorY);
-      cursorY += 6;
-      const bodyOther = other.map((d, idx) => [
-        String(main.length + idx + 1),
-        `(${d.code}) - ${d.title} (${d.confidence}%)`,
-        lastReport.dateOnly
-      ]);
-      doc.autoTable({
-        startY: cursorY,
-        head: [["SlNo.", "Description of any other Defects", "Marked On"]],
-        body: bodyOther,
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39] },
-        margin: { left: margin, right: margin },
-        columnStyles: {
-          0: { cellWidth: 14 },
-          1: { cellWidth: 138 },
-          2: { cellWidth: 28 }
-        }
-      });
-      cursorY = doc.lastAutoTable.finalY + 8;
-    }
-  } else {
-    // Fallback when autoTable didn't attach (some browsers/CDN edge cases).
-    doc.setFontSize(10);
-    doc.text("Defects:", margin, cursorY);
-    cursorY += 6;
-    const all = lastReport.defects.length ? lastReport.defects : [{ code: 0, title: "No defects detected.", confidence: 0 }];
-    for (let i = 0; i < all.length; i += 1) {
-      const d = all[i];
-      const line = `${i + 1}. (${d.code}) ${d.title} (${d.confidence}%)`;
-      const wrapped = doc.splitTextToSize(line, 180);
-      doc.text(wrapped, margin, cursorY);
-      cursorY += wrapped.length * 5;
-      if (cursorY > 270) {
-        doc.addPage();
-        cursorY = 16;
-      }
-    }
-    cursorY += 4;
-  }
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(`Date : ${lastReport.nowDisplay}`, margin, cursorY);
-
-  // Cross-browser strategy:
-  // 1) Blob URL + anchor download
-  // 2) jsPDF save()
-  // 3) dataurlnewwindow (mobile fallback)
-  const filename = "defect-screening-report.pdf";
-  let lastErr = null;
-  let preparedUrl = null;
-
-  try {
-    const blob = doc.output("blob");
-    const url = URL.createObjectURL(blob);
-    preparedUrl = url;
-    if (manualDownloadLink) {
-      manualDownloadLink.href = url;
-      manualDownloadLink.download = filename;
-      manualDownloadLink.classList.remove("hidden");
-    }
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    return;
-  } catch (err) {
-    console.error("Blob download failed", err);
-    lastErr = err;
-  }
-
-  try {
-    doc.save(filename);
-    return;
-  } catch (err) {
-    console.error("doc.save failed", err);
-    lastErr = err;
-  }
-
-  try {
-    const dataUrl = doc.output("dataurlstring");
-    if (manualDownloadLink) {
-      manualDownloadLink.href = dataUrl;
-      manualDownloadLink.classList.remove("hidden");
-    }
-    doc.output("dataurlnewwindow");
-    return;
-  } catch (err) {
-    console.error("dataurlnewwindow failed", err);
-    lastErr = err;
-  }
-
-  if (preparedUrl && manualDownloadLink) {
-    manualDownloadLink.href = preparedUrl;
-    manualDownloadLink.classList.remove("hidden");
-  }
-  throw lastErr || new Error("No supported PDF download method succeeded.");
-}
-
 function renderResult(defects) {
   const now = new Date();
   const dd = String(now.getDate()).padStart(2, "0");
@@ -290,9 +116,6 @@ function renderResult(defects) {
   const main = defects.slice(0, 3);
   const other = defects.slice(3);
   const topRisk = defects[0]?.confidence ?? 0;
-
-  lastReport = { defects, dateOnly, nowDisplay, topRisk };
-  if (pdfActions) pdfActions.classList.remove("hidden");
 
   const mainRows = main.map((d, i) => `
     <tr>
@@ -339,22 +162,6 @@ function renderResult(defects) {
   result.classList.remove("hidden");
 }
 
-if (downloadPdfBtn) {
-  downloadPdfBtn.addEventListener("click", () => {
-    try {
-      downloadPdfReport();
-      setStatus("PDF download started.");
-    } catch (err) {
-      setStatus(
-        err?.message
-          ? `PDF export failed: ${err.message}. Try desktop Chrome/Edge, or allow popups/downloads for this site.`
-          : "PDF export failed. Try desktop Chrome/Edge, or allow popups/downloads for this site.",
-        true
-      );
-    }
-  });
-}
-
 button.addEventListener("click", async () => {
   const file = input.files?.[0];
   if (!file) {
@@ -364,12 +171,6 @@ button.addEventListener("click", async () => {
   progressWrap.classList.remove("hidden");
   progressBar.style.width = "0%";
   result.classList.add("hidden");
-  if (pdfActions) pdfActions.classList.add("hidden");
-  if (manualDownloadLink) {
-    manualDownloadLink.classList.add("hidden");
-    manualDownloadLink.removeAttribute("href");
-  }
-  lastReport = null;
   button.disabled = true;
   button.textContent = "Checking...";
   setStatus("Preparing analysis...");
