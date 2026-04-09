@@ -32,6 +32,36 @@ function confidenceClass(score) {
   return "low";
 }
 
+function formatNowLikeNotice(now) {
+  const dd = String(now.getDate()).padStart(2, "0");
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(now.getFullYear());
+  const hh = now.getHours() % 12 || 12;
+  const min = String(now.getMinutes()).padStart(2, "0");
+  const ampm = now.getHours() >= 12 ? "PM" : "AM";
+  return `${dd}/${mm}/${yyyy} ${hh}:${min} ${ampm}`;
+}
+
+function extractCaseContext(rawText) {
+  const lines = rawText
+    .split(/\r?\n/)
+    .map((x) => x.trim())
+    .filter(Boolean);
+
+  const diaryMatch = rawText.match(/diary\s*no\.?\s*[:\-]?\s*([0-9]{3,}\/[0-9]{2,4})/i);
+  const diaryNo = diaryMatch?.[1] || "N/A";
+
+  let caseTitle = "N/A";
+  for (const line of lines) {
+    if (/\b(vs\.?|versus)\b/i.test(line) && line.length > 12) {
+      caseTitle = line.replace(/\s+/g, " ");
+      break;
+    }
+  }
+
+  return { diaryNo, caseTitle };
+}
+
 function keywordsFromText(text) {
   const words = (text.toLowerCase().match(/[a-z]{4,}/g) || []);
   const stop = new Set(["should", "filed", "given", "with", "that", "from", "this", "been", "also", "into", "only", "where", "which"]);
@@ -132,7 +162,11 @@ async function extractPdfText(file) {
     progressBar.style.width = `${Math.round((i / pdf.numPages) * 100)}%`;
     setStatus(`Analyzing page ${i} of ${pdf.numPages}...`);
   }
-  return chunks.join("\n").toLowerCase();
+  const rawText = chunks.join("\n");
+  return {
+    rawText,
+    normalizedText: rawText.toLowerCase()
+  };
 }
 
 function checkRules(text) {
@@ -150,13 +184,13 @@ function checkRules(text) {
   return hits.sort((a, b) => b.confidence - a.confidence);
 }
 
-function renderResult(defects) {
+function renderResult(defects, context) {
   const now = new Date();
   const dd = String(now.getDate()).padStart(2, "0");
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const yyyy = String(now.getFullYear());
   const dateOnly = `${dd}/${mm}/${yyyy}`;
-  const nowDisplay = now.toLocaleString();
+  const nowDisplay = formatNowLikeNotice(now);
   const main = defects.slice(0, 3);
   const other = defects.slice(3);
   const topRisk = defects[0]?.confidence ?? 0;
@@ -185,7 +219,10 @@ function renderResult(defects) {
       <div class="metric"><span class="label">Top Risk</span><span class="value">${topRisk}%</span></div>
     </div>
     <p>Dear Sir/Madam</p>
-    <p class="indent">Please find below the defect screening summary for your filing.</p>
+    <p class="indent">Thank you for using e-filing.</p>
+    <p class="indent">Please check defect(s) marked against</p>
+    <p class="indent">Diary No:${context.diaryNo} in the matter</p>
+    <p class="indent">${context.caseTitle}</p>
     <table>
       <thead>
         <tr>
@@ -201,6 +238,7 @@ function renderResult(defects) {
       </tbody>
     </table>
     <p><strong>Date :</strong>${nowDisplay}</p>
+    <p class="indent">Please check your Dashboard regularly for new updates.</p>
     <p><small>Rules checked: ${ACTIVE_RULES.length} | Possible defects: ${defects.length} | Source: ${RULE_SOURCE}</small></p>
   `;
   result.classList.remove("hidden");
@@ -223,8 +261,9 @@ button.addEventListener("click", async () => {
     if (!file.name.toLowerCase().endsWith(".pdf")) {
       throw new Error("Please upload a .pdf file.");
     }
-    const text = await extractPdfText(file);
-    if (!text || text.trim().length < 30) {
+    const textPayload = await extractPdfText(file);
+    const context = extractCaseContext(textPayload.rawText);
+    if (!textPayload.normalizedText || textPayload.normalizedText.trim().length < 30) {
       setStatus(
         "This PDF has little/no extractable text (often scanned/image-only). Convert it to a text-based PDF (OCR) and try again.",
         true
@@ -232,8 +271,8 @@ button.addEventListener("click", async () => {
       return;
     }
     setStatus("Matching objections...");
-    const defects = checkRules(text);
-    renderResult(defects);
+    const defects = checkRules(textPayload.normalizedText);
+    renderResult(defects, context);
     setStatus("Check completed.");
   } catch (e) {
     console.error("PDF read error:", e);
