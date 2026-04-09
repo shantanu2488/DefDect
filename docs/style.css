@@ -40,22 +40,6 @@ h1 {
   letter-spacing: 0.08em;
 }
 
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.chip {
-  background: #eff6ff;
-  color: #1d4ed8;
-  border: 1px solid #bfdbfe;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 12px;
-}
-
 input[type="file"] {
   padding: 9px;
   border: 1px solid #cbd5e1;
