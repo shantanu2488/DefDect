@@ -50,19 +50,34 @@ async function extractPdfText(file) {
   // Fallback to parsing on main thread if worker setup fails.
   let pdf;
   try {
-    pdf = await pdfjsLib.getDocument(baseOpts).promise;
+    pdf = await pdfjsLib.getDocument({
+      ...baseOpts,
+      stopAtErrors: false,
+      disableFontFace: true
+    }).promise;
   } catch (err) {
     console.error("pdf.js worker load failed, retrying without worker", err);
-    pdf = await pdfjsLib.getDocument({ ...baseOpts, disableWorker: true }).promise;
+    pdf = await pdfjsLib.getDocument({
+      ...baseOpts,
+      disableWorker: true,
+      stopAtErrors: false,
+      disableFontFace: true
+    }).promise;
   }
   const chunks = [];
   setStatus(`Reading ${pdf.numPages} page(s)...`);
 
   for (let i = 1; i <= pdf.numPages; i += 1) {
-    const page = await pdf.getPage(i);
-    const content = await page.getTextContent();
-    const text = content.items.map((x) => x.str).join(" ");
-    chunks.push(text);
+    try {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent({ disableCombineTextItems: false });
+      const text = content.items.map((x) => x.str).join(" ");
+      chunks.push(text);
+    } catch (pageErr) {
+      // Keep going even if a page can't be decoded.
+      console.error(`PDF page ${i} parse error`, pageErr);
+      chunks.push("");
+    }
     progressBar.style.width = `${Math.round((i / pdf.numPages) * 100)}%`;
     setStatus(`Analyzing page ${i} of ${pdf.numPages}...`);
   }
@@ -260,6 +275,13 @@ button.addEventListener("click", async () => {
       throw new Error("Please upload a .pdf file.");
     }
     const text = await extractPdfText(file);
+    if (!text || text.trim().length < 30) {
+      setStatus(
+        "This PDF has little/no extractable text (often scanned/image-only). Convert it to a text-based PDF (OCR) and try again.",
+        true
+      );
+      return;
+    }
     setStatus("Matching objections...");
     const defects = checkRules(text);
     renderResult(defects);
